@@ -9,28 +9,79 @@ The system receives a user question and passes it through
 multiple specialized agents. Each agent performs a specific
 task before the final report is generated.
 
-## Workflow
+## Multi-Agent Workflow
 
-User Question
-     |
-     v
-Supervisor
-     |
-     v
-Research Agent
-     |
-     v
-Fact Checker Agent
-     |
-     v
-Analysis Agent
-     |
-     v
-Writer Agent
-     |
-     v
-Final Report
+```mermaid
+flowchart TD
+    START([Start]) --> SUP[Supervisor]
 
+    SUP -->|Needs research| RES[Research Agent]
+    RES --> SUP
+
+    SUP -->|Needs fact check| FC[Fact Checker]
+    FC --> SUP
+
+    SUP -->|Needs analysis| AN[Analysis Agent]
+    AN --> SUP
+
+    SUP -->|Needs report| WR[Writer]
+    WR --> REV[Reviewer]
+
+    REV -->|Approved| END([End])
+    REV -->|Rejected #1| WR
+    REV -->|Rejected #2| MR[Manual Review / Escalation]
+
+    MR --> END
+```
+## Shared State Schema
+
+All agents communicate through a shared `ResearchState`.
+
+```text
+┌───────────────────────────────────────────────┐
+│                 ResearchState                 │
+├───────────────────────────────────────────────┤
+│ question        : str                         │
+│ research        : str                         │
+│ fact_check      : str                         │
+│ analysis        : str                         │
+│ final_report    : str                         │
+│ review_feedback : str                         │
+│ review_count    : int                         │
+│ next_agent      : str                         │
+└───────────────────────────────────────────────┘
+```
+
+The shared state allows each specialized agent to read information
+produced by previous agents and add its own result.
+
+The `review_count` field limits the automatic revision cycle and
+prevents an infinite review loop.
+
+## Reviewer and Rejection Handling
+
+After the Writer creates the final report, the Reviewer evaluates it.
+
+### If the report is approved
+
+The workflow ends and the final report is accepted.
+
+### If the report is rejected once
+
+The Reviewer provides feedback and sends the report back to the Writer.
+
+The Writer revises the report, and the revised report is sent to the
+Reviewer again.
+
+### If the report is rejected twice
+
+The automatic revision cycle stops.
+
+The report is sent to the Manual Review / Escalation stage instead of
+being repeatedly sent back to the Writer.
+
+This prevents an infinite revision loop and provides a clear stopping
+condition for the workflow.
 ## Agents
 
 ### 1. Supervisor
